@@ -85,76 +85,42 @@ exports.login = async (req, res) => {
 };
 
 // Change Password
+// In your changePassword function in the backend
 exports.changePassword = async (req, res) => {
   const { userId, currentPassword, newPassword, newConfirmPassword } = req.body;
 
   try {
-    // Detailed input validation
-    if (!userId) {
-      return res.status(400).json({ msg: "User ID is required" });
-    }
-    if (!currentPassword) {
-      return res.status(400).json({ msg: "Current password is required" });
-    }
-    if (!newPassword) {
-      return res.status(400).json({ msg: "New password is required" });
-    }
-    if (!newConfirmPassword) {
-      return res.status(400).json({ msg: "Password confirmation is required" });
+    console.log(`Attempting to change password for user: ${userId}`);
+
+    // Validate input
+    if (!userId || !currentPassword || !newPassword || !newConfirmPassword) {
+      console.log("Missing required fields");
+      return res.status(400).json({ msg: "All fields are required" });
     }
 
-    if (newPassword !== newConfirmPassword) {
-      return res.status(400).json({ msg: "New passwords do not match" });
-    }
-
-    if (newPassword.length < 8) {
-      return res
-        .status(400)
-        .json({ msg: "New password must be at least 8 characters long" });
-    }
-
-    // Find user by ID
+    // Find user
     const user = await User.findById(userId).select("+password");
     if (!user) {
-      return res.status(404).json({ msg: "User not found", userId });
+      console.log(`User not found: ${userId}`);
+      return res.status(404).json({ msg: "User not found" });
     }
 
-    // Check if current password is correct
+    // Check current password
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
+      console.log("Current password is incorrect");
       return res.status(400).json({ msg: "Current password is incorrect" });
     }
 
-    // Hash new password
+    // Update password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-
-    // Save updated user
     await user.save();
 
+    console.log(`Password successfully changed for user: ${userId}`);
     res.json({ msg: "Password updated successfully" });
   } catch (error) {
-    console.error("Change password error:", error);
-
-    // More detailed error responses
-    if (error.name === "ValidationError") {
-      return res
-        .status(400)
-        .json({ msg: "Validation error", details: error.errors });
-    }
-    if (error.name === "CastError") {
-      return res.status(400).json({ msg: "Invalid user ID format", userId });
-    }
-    if (error.code === 11000) {
-      return res
-        .status(400)
-        .json({ msg: "Duplicate key error", details: error.keyValue });
-    }
-
-    res.status(500).json({
-      msg: "Server error",
-      error: error.message,
-      stack: process.env.NODE_ENV === "production" ? "🥞" : error.stack,
-    });
+    console.error("Error in changePassword:", error);
+    res.status(500).json({ msg: "Server error", error: error.message });
   }
 };
