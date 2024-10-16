@@ -89,9 +89,18 @@ exports.changePassword = async (req, res) => {
   const { userId, currentPassword, newPassword, newConfirmPassword } = req.body;
 
   try {
-    // Validate input
-    if (!userId || !currentPassword || !newPassword || !newConfirmPassword) {
-      return res.status(400).json({ msg: "All fields are required" });
+    // Detailed input validation
+    if (!userId) {
+      return res.status(400).json({ msg: "User ID is required" });
+    }
+    if (!currentPassword) {
+      return res.status(400).json({ msg: "Current password is required" });
+    }
+    if (!newPassword) {
+      return res.status(400).json({ msg: "New password is required" });
+    }
+    if (!newConfirmPassword) {
+      return res.status(400).json({ msg: "Password confirmation is required" });
     }
 
     if (newPassword !== newConfirmPassword) {
@@ -107,7 +116,7 @@ exports.changePassword = async (req, res) => {
     // Find user by ID
     const user = await User.findById(userId).select("+password");
     if (!user) {
-      return res.status(404).json({ msg: "User not found" });
+      return res.status(404).json({ msg: "User not found", userId });
     }
 
     // Check if current password is correct
@@ -126,6 +135,26 @@ exports.changePassword = async (req, res) => {
     res.json({ msg: "Password updated successfully" });
   } catch (error) {
     console.error("Change password error:", error);
-    res.status(500).json({ msg: "Server error", error: error.message });
+
+    // More detailed error responses
+    if (error.name === "ValidationError") {
+      return res
+        .status(400)
+        .json({ msg: "Validation error", details: error.errors });
+    }
+    if (error.name === "CastError") {
+      return res.status(400).json({ msg: "Invalid user ID format", userId });
+    }
+    if (error.code === 11000) {
+      return res
+        .status(400)
+        .json({ msg: "Duplicate key error", details: error.keyValue });
+    }
+
+    res.status(500).json({
+      msg: "Server error",
+      error: error.message,
+      stack: process.env.NODE_ENV === "production" ? "🥞" : error.stack,
+    });
   }
 };
