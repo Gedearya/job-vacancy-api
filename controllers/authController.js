@@ -1,6 +1,5 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 
 // Register
 exports.register = async (req, res) => {
@@ -42,6 +41,7 @@ exports.register = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Registration error:", error);
     res.status(500).json({ msg: "Server error", error: error.message });
   }
 };
@@ -52,12 +52,13 @@ exports.login = async (req, res) => {
 
   try {
     // Find user by email
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ msg: "Invalid credentials" });
 
     // Check password
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) return res.status(400).json({ msg: "Invalid credentials" });
+    if (user.password !== password) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -65,9 +66,6 @@ exports.login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
-
-    // Remove password from user object
-    user.password = undefined;
 
     // Send response
     res.json({
@@ -80,12 +78,12 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ msg: "Server error", error: error.message });
   }
 };
 
 // Change Password
-// In your changePassword function in the backend
 exports.changePassword = async (req, res) => {
   const { userId, currentPassword, newPassword, newConfirmPassword } = req.body;
 
@@ -99,22 +97,26 @@ exports.changePassword = async (req, res) => {
     }
 
     // Find user
-    const user = await User.findById(userId).select("+password");
+    const user = await User.findById(userId);
     if (!user) {
       console.log(`User not found: ${userId}`);
       return res.status(404).json({ msg: "User not found" });
     }
 
     // Check current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
+    if (user.password !== currentPassword) {
       console.log("Current password is incorrect");
       return res.status(400).json({ msg: "Current password is incorrect" });
     }
 
+    // Check if new passwords match
+    if (newPassword !== newConfirmPassword) {
+      console.log("New passwords do not match");
+      return res.status(400).json({ msg: "New passwords do not match" });
+    }
+
     // Update password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    user.password = newPassword;
     await user.save();
 
     console.log(`Password successfully changed for user: ${userId}`);
