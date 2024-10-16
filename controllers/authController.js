@@ -86,32 +86,46 @@ exports.login = async (req, res) => {
 
 // Change Password
 exports.changePassword = async (req, res) => {
-  const { current_password, new_password, new_confirm_password } = req.body;
+  const { userId, currentPassword, newPassword, newConfirmPassword } = req.body;
 
   try {
-    // Validate new password length
-    if (new_password.length < 8) {
+    // Validate input
+    if (!userId || !currentPassword || !newPassword || !newConfirmPassword) {
+      return res.status(400).json({ msg: "All fields are required" });
+    }
+
+    if (newPassword !== newConfirmPassword) {
+      return res.status(400).json({ msg: "New passwords do not match" });
+    }
+
+    if (newPassword.length < 8) {
       return res
         .status(400)
         .json({ msg: "New password must be at least 8 characters long" });
     }
 
-    // Check if new password and confirmation match
-    if (new_password !== new_confirm_password) {
-      return res
-        .status(400)
-        .json({ msg: "New password and confirmation do not match" });
+    // Find user by ID
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
     }
 
-    const user = await User.findById(req.user.id).select("+password");
-    const isMatch = await user.matchPassword(current_password);
-    if (!isMatch)
+    // Check if current password is correct
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
       return res.status(400).json({ msg: "Current password is incorrect" });
+    }
 
-    user.password = new_password;
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+
+    // Save updated user
     await user.save();
+
     res.json({ msg: "Password updated successfully" });
   } catch (error) {
+    console.error("Change password error:", error);
     res.status(500).json({ msg: "Server error", error: error.message });
   }
 };
